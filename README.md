@@ -10,33 +10,37 @@ In this workshop, we will use a sample content platform application as a practic
 
 ## Technology Stack
 
--   **Framework:** Preact with Hooks
--   **Language:** TypeScript
--   **Build Tool:** Vite
--   **Styling:** CSS Modules
--   **Key Library:** `@erc7824/nitrolite`
+- **Framework:** Preact with Hooks
+- **Language:** TypeScript
+- **Build Tool:** Vite
+- **Styling:** CSS Modules
+- **Key Library:** `@erc7824/nitrolite`
 
 ## Getting Started
 
 ### Prerequisites
--   [Node.js](https://nodejs.org/) (v18 or later)
--   A WebSocket RPC endpoint for Nitrolite.
+
+- [Node.js](https://nodejs.org/) (v18 or later)
+- A WebSocket RPC endpoint for Nitrolite.
 
 ### Installation & Setup
 
 1.  **Clone the repository:**
+
     ```bash
     git clone <your-repo-url>
     cd nitrolite-example
     ```
 
 2.  **Install dependencies:**
+
     ```bash
     npm install
     ```
 
 3.  **Set up environment variables:**
     Create a file named `.env.local` in the root of the project and add your Nitrolite WebSocket URL:
+
     ```env
     # .env.local
     VITE_NITROLITE_WS_URL=wss://your-rpc-endpoint.com/ws
@@ -52,12 +56,12 @@ In this workshop, we will use a sample content platform application as a practic
 
 This repository uses branches to guide you through the workshop. You can switch between branches to see the code evolve at each stage.
 
--   `main`: The initial project setup.
--   `chapter-1-wallet-connect`: Solution for Chapter 1 (Connecting to a user's wallet).
--   `chapter-2-ws-connection`: Solution for Chapter 2 (Initializing the WebSocket connection).
--   `chapter-3-session-auth`: Solution for Chapter 3 (Authenticating the session via WebSocket).
--   `chapter-4-display-balances`: Solution for Chapter 4 (Fetching and displaying asset balances).
--   `final-p2p-transfer`: The final, completed application with peer-to-peer transfers.
+- `main`: The initial project setup.
+- `chapter-1-wallet-connect`: Solution for Chapter 1 (Connecting to a user's wallet).
+- `chapter-2-ws-connection`: Solution for Chapter 2 (Initializing the WebSocket connection).
+- `chapter-3-session-auth`: Solution for Chapter 3 (Authenticating the session via WebSocket).
+- `chapter-4-display-balances`: Solution for Chapter 4 (Fetching and displaying asset balances).
+- `final-p2p-transfer`: The final, completed application with peer-to-peer transfers.
 
 ## Note for Presenters
 

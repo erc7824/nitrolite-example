@@ -10,13 +10,14 @@
         "preview": "vite preview"
     },
     "dependencies": {
-        "preact": "^10.26.9"
+        "preact": "^10.26.9",
+        "viem": "2.32.0"
     },
     "devDependencies": {
         "@preact/preset-vite": "^2.10.2",
         "@types/node": "^20.11.0",
+        "prettier": "3.5.3",
         "typescript": "~5.8.3",
-        "vite": "^7.0.4",
-        "prettier": "3.5.3"
+        "vite": "^7.0.4"
     }
 }
