@@ -1,0 +1,137 @@
+:root {
+    --background: #0a0a0b;
+    --text-primary: #f8f9fa;
+    --text-secondary: #8b949e;
+    --text-muted: #8b949e;
+    --border: #21262d;
+    --accent: #58a6ff;
+    --accent-hover: #1f6feb;
+    --surface: #21262d;
+    --surface-hover: #30363d;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family:
+        "Inter",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        system-ui,
+        sans-serif;
+    background-color: var(--background);
+    color: var(--text-primary);
+    line-height: 1.6;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.app-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+}
+
+.header {
+    text-align: center;
+    padding: 4rem 0 2rem;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+}
+
+.header-content {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.logo {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 4rem;
+    font-weight: 900;
+    margin: 0 0 1rem 0;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+    text-shadow:
+        3px 3px 0px var(--accent-hover),
+        6px 6px 0px rgba(31, 111, 235, 0.3),
+        9px 9px 0px rgba(31, 111, 235, 0.2);
+    filter: drop-shadow(0 0 15px rgba(88, 166, 255, 0.6));
+    font-style: italic;
+    transform: rotate(-2deg);
+}
+
+.tagline {
+    font-size: 1.125rem;
+    color: var(--text-primary);
+    margin: 0;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: normal;
+    position: absolute;
+    bottom: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--background);
+    padding: 0 1rem;
+    white-space: nowrap;
+}
+
+.main-content {
+    padding: 2rem 0;
+}
+
+h1 {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin: 0 0 2rem 0;
+    color: var(--text-primary);
+}
+
+h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem 0;
+    color: var(--text-primary);
+}
+
+button {
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background-color: var(--surface);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+button:hover:not(:disabled) {
+    background-color: var(--surface-hover);
+    border-color: var(--text-secondary);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+select {
+    font-family: inherit;
+    font-size: 0.875rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background-color: var(--surface);
+    color: var(--text-primary);
+    cursor: pointer;
+    min-width: 200px;
+}

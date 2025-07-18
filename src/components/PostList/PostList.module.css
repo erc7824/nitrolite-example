@@ -1,0 +1,242 @@
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+.title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 1rem 0;
+    font-family: "JetBrains Mono", monospace;
+    letter-spacing: -0.04em;
+    line-height: 1.4;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.card {
+    position: relative;
+    background: var(--background);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.2s ease;
+    container-type: inline-size;
+}
+
+.card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.cardLink {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    padding: 1rem;
+    position: relative;
+    height: 100%;
+}
+
+.showNumber {
+    position: absolute;
+    right: 0;
+    top: 0;
+    transform: translate(6.9%, -22%) rotate(-5deg);
+    font-size: max(1.5rem, min(22cqw, 6rem));
+    font-weight: 900;
+    color: var(--accent);
+    line-height: 1;
+    font-family: "JetBrains Mono", monospace;
+    pointer-events: none;
+    z-index: 1;
+    text-shadow:
+        2px 2px 0px var(--accent-hover),
+        4px 4px 0px rgba(31, 111, 235, 0.3),
+        6px 6px 0px rgba(31, 111, 235, 0.2);
+    filter: drop-shadow(0 0 10px rgba(88, 166, 255, 0.5));
+    font-style: italic;
+}
+
+.details {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.date {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin: 0 0 1rem 0;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.date span {
+    margin: 0 0.5rem;
+    opacity: 0.5;
+}
+
+.showTitle {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 1rem 0;
+    line-height: 1.3;
+    font-family: "JetBrains Mono", monospace;
+    letter-spacing: -0.02em;
+}
+
+.description {
+    color: var(--text-secondary);
+    margin: 0 0 auto 0;
+    line-height: 1.6;
+    font-size: 0.95rem;
+    flex-grow: 1;
+}
+
+.bottomRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+}
+
+.pile {
+    display: flex;
+    align-items: center;
+}
+
+.avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: white;
+    text-transform: uppercase;
+    border: 2px solid var(--background);
+}
+
+.buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.supportButton {
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.supportButton:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: translateY(-1px);
+}
+
+.supportButton:active {
+    transform: translateY(0);
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 0 1rem;
+    }
+
+    .grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+
+    .cardLink {
+        padding: 1.5rem;
+    }
+
+    .showNumber {
+        font-size: max(1rem, min(30cqw, 8rem));
+        transform: translate(5%, -15%);
+    }
+
+    .title {
+        font-size: 2rem;
+    }
+
+    .showTitle {
+        font-size: 1.25rem;
+    }
+
+    .bottomRow {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-top: 1.5rem;
+        padding-top: 1rem;
+    }
+
+    .buttons {
+        align-self: stretch;
+    }
+
+    .supportButton {
+        flex: 1;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 0 0.5rem;
+    }
+
+    .showNumber {
+        font-size: max(0.8rem, min(25cqw, 6rem));
+    }
+
+    .cardLink {
+        padding: 1rem;
+    }
+}
