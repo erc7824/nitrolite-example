@@ -4,9 +4,10 @@ import styles from './PostList.module.css';
 interface PostListProps {
     posts: Post[];
     isWalletConnected: boolean;
+    isAuthenticated: boolean;
 }
 
-export function PostList({ posts, isWalletConnected }: PostListProps) {
+export function PostList({ posts, isWalletConnected, isAuthenticated }: PostListProps) {
     const handleTip = (post: Post) => {
         // --- WORKSHOP: INSTANT TIP LOGIC ---
         // This is where we'll implement the instant tip functionality
@@ -58,13 +59,17 @@ export function PostList({ posts, isWalletConnected }: PostListProps) {
                                     <div className={styles.buttons}>
                                         <button
                                             className={styles.supportButton}
-                                            disabled={!isWalletConnected}
+                                            disabled={!isWalletConnected || !isAuthenticated}
                                             onClick={(e) => {
                                                 e.preventDefault();
                                                 handleTip(post);
                                             }}
                                         >
-                                            Support
+                                            {!isWalletConnected
+                                                ? 'Connect Wallet'
+                                                : !isAuthenticated
+                                                  ? 'Authenticating...'
+                                                  : 'Support'}
                                         </button>
                                     </div>
                                 </div>

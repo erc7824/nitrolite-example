@@ -9,7 +9,6 @@ class WebSocketService {
     private statusListeners: Set<StatusListener> = new Set();
     private messageListeners: Set<MessageListener> = new Set();
     private messageQueue: string[] = [];
-    private requestId = 1;
 
     public connect() {
         if (this.socket && this.socket.readyState < 2) return;
@@ -47,11 +46,12 @@ class WebSocketService {
         this.socket.onerror = () => this.updateStatus('Disconnected');
     }
 
-    public send(method: string, params: any) {
-        const payload = JSON.stringify({ jsonrpc: '2.0', id: this.requestId++, method, params });
-
-        if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(payload);
-        else this.messageQueue.push(payload);
+    public send(payload: string) {
+        if (this.socket?.readyState === WebSocket.OPEN) {
+            this.socket.send(payload);
+        } else {
+            this.messageQueue.push(payload);
+        }
     }
 
     private updateStatus(newStatus: WsStatus) {
