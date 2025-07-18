@@ -10,33 +10,37 @@ In this workshop, we will use a sample content platform application as a practic
 
 ## Technology Stack
 
--   **Framework:** Preact with Hooks
--   **Language:** TypeScript
--   **Build Tool:** Vite
--   **Styling:** CSS Modules
--   **Key Library:** `@erc7824/nitrolite`
+- **Framework:** Preact with Hooks
+- **Language:** TypeScript
+- **Build Tool:** Vite
+- **Styling:** CSS Modules
+- **Key Library:** `@erc7824/nitrolite`
 
 ## Getting Started
 
 ### Prerequisites
--   [Node.js](https://nodejs.org/) (v18 or later)
--   A WebSocket RPC endpoint for Nitrolite.
+
+- [Node.js](https://nodejs.org/) (v18 or later)
+- A WebSocket RPC endpoint for Nitrolite.
 
 ### Installation & Setup
 
 1.  **Clone the repository:**
+
     ```bash
     git clone <your-repo-url>
     cd nitrolite-example
     ```
 
 2.  **Install dependencies:**
+
     ```bash
     npm install
     ```
 
 3.  **Set up environment variables:**
     Create a file named `.env.local` in the root of the project and add your Nitrolite WebSocket URL:
+
     ```env
     # .env.local
     VITE_NITROLITE_WS_URL=wss://your-rpc-endpoint.com/ws
