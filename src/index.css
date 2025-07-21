@@ -175,3 +175,15 @@ select {
 .ws-status.disconnected .status-dot {
     background-color: #da3633;
 }
+
+/* FINAL: Transfer status styles */
+.transfer-status {
+    text-align: center;
+    padding: 1rem;
+    margin: 1rem auto;
+    max-width: 400px;
+    background-color: var(--accent);
+    color: white;
+    border-radius: 6px;
+    font-weight: 500;
+}
