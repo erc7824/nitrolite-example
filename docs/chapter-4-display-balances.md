@@ -1,27 +1,98 @@
+# Chapter 4: Fetching Balances with the Session Key
+
+## Goal
+
+Now that we have an authenticated session, we can perform actions on behalf of the user without prompting them for another signature. In this chapter, we will use the temporary **session key** to sign and send our first request: fetching the user's off-chain asset balances from the Nitrolite RPC.
+
+## Why This Approach?
+
+This is the payoff for the setup in Chapter 3. By using the session key's private key (which our application holds in memory), we can create a `signer` function that programmatically signs requests. This enables a seamless, Web2-like experience where data can be fetched and actions can be performed instantly after the initial authentication.
+
+## Interaction Flow
+
+This diagram illustrates how the authenticated session key is used to fetch data directly from ClearNode.
+
+```mermaid
+sequenceDiagram
+    participant App as "Our dApp"
+    participant WSS as "WebSocketService"
+    participant ClearNode as "ClearNode"
+
+    App->>App: Authentication completes
+    App->>WSS: 1. Sends signed `get_ledger_balances` request
+    WSS->>ClearNode: 2. Forwards request via WebSocket
+    ClearNode->>ClearNode: 3. Verifies session signature & queries ledger
+    ClearNode-->>WSS: 4. Responds with `get_ledger_balances` response
+    WSS-->>App: 5. Receives balance data
+    App->>App: 6. Updates state and UI
+```
+
+## Key Tasks
+
+1. **Add Balance State**: Introduce a new state variable in `App.tsx` to store the fetched balances.
+2. **Create a `BalanceDisplay` Component**: Build a simple, reusable component to show the user's USDC balance.
+3. **Fetch Balances on Authentication**: Create a `useEffect` hook that automatically requests the user's balances as soon as `isAuthenticated` becomes `true`.
+4. **Use a Session Key Signer**: Use the `createECDSAMessageSigner` helper from the Nitrolite SDK to sign the request using the session key's private key.
+5. **Handle the Response**: Update the WebSocket message handler to parse both `get_ledger_balances` responses and automatic `BalanceUpdate` messages from the server.
+
+## Implementation Steps
+
+### 1. Create the `BalanceDisplay` Component
+
+Create a new file at `src/components/BalanceDisplay/BalanceDisplay.tsx`. This component will be responsible for showing the user's balance in the header.
+
+```tsx
+// filepath: src/components/BalanceDisplay/BalanceDisplay.tsx
+// CHAPTER 4: Balance display component
+import styles from './BalanceDisplay.module.css';
+
+interface BalanceDisplayProps {
+    balance: string | null;
+    symbol: string;
+}
+
+export function BalanceDisplay({ balance, symbol }: BalanceDisplayProps) {
+    // CHAPTER 4: Format balance for display
+    const formattedBalance = balance ? parseFloat(balance).toFixed(2) : '0.00';
+
+    return (
+        <div className={styles.balanceContainer}>
+            <span className={styles.balanceAmount}>{formattedBalance}</span>
+            <span className={styles.balanceSymbol}>{symbol}</span>
+        </div>
+    );
+}
+```
+
+### 2. Update `App.tsx` to Fetch and Display Balances
+
+This is the final step. We'll add the logic to fetch and display the balances.
+
+```tsx
+// filepath: src/App.tsx
 import { useState, useEffect } from 'preact/hooks';
 import { createWalletClient, custom, type Address, type WalletClient } from 'viem';
 import { mainnet } from 'viem/chains';
-// CHAPTER 3: Authentication imports
-// CHAPTER 4: Add balance fetching imports
 import {
     createAuthRequestMessage,
     createAuthVerifyMessage,
     createEIP712AuthMessageSigner,
-    parseAnyRPCResponse,
+    NitroliteRPC,
     RPCMethod,
     type AuthChallengeResponse,
     type AuthRequestParams,
+    // CHAPTER 4: Add balance fetching imports
     createECDSAMessageSigner,
     createGetLedgerBalancesMessage,
     type GetLedgerBalancesResponse,
     type BalanceUpdateResponse,
 } from '@erc7824/nitrolite';
+
 import { PostList } from './components/PostList/PostList';
 // CHAPTER 4: Import the new BalanceDisplay component
 import { BalanceDisplay } from './components/BalanceDisplay/BalanceDisplay';
 import { posts } from './data/posts';
 import { webSocketService, type WsStatus } from './lib/websocket';
-// CHAPTER 3: Authentication utilities
 import {
     generateSessionKey,
     getStoredSessionKey,
@@ -32,38 +103,22 @@ import {
     type SessionKey,
 } from './lib/utils';
 
-declare global {
-    interface Window {
-        ethereum?: any;
-    }
-}
-
-// CHAPTER 3: EIP-712 domain for Nexus authentication
-const getAuthDomain = () => ({
-    name: 'Nexus',
-});
-
-// CHAPTER 3: Authentication constants
-const AUTH_SCOPE = 'nexus.app';
-const APP_NAME = 'Nexus';
-const SESSION_DURATION = 3600; // 1 hour
+const SESSION_DURATION_SECONDS = 3600; // 1 hour
 
 export function App() {
     const [account, setAccount] = useState<Address | null>(null);
     const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
     const [wsStatus, setWsStatus] = useState<WsStatus>('Disconnected');
-    // CHAPTER 3: Authentication state
     const [sessionKey, setSessionKey] = useState<SessionKey | null>(null);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isAuthAttempted, setIsAuthAttempted] = useState(false);
-    const [sessionExpireTimestamp, setSessionExpireTimestamp] = useState<string>('');
     // CHAPTER 4: Add balance state to store fetched balances
     const [balances, setBalances] = useState<Record<string, string> | null>(null);
     // CHAPTER 4: Add loading state for better user experience
     const [isLoadingBalances, setIsLoadingBalances] = useState(false);
 
+    // Initialize WebSocket connection and session key (from previous chapters)
     useEffect(() => {
-        // CHAPTER 3: Get or generate session key on startup (IMPORTANT: Store in localStorage)
         const existingSessionKey = getStoredSessionKey();
         if (existingSessionKey) {
             setSessionKey(existingSessionKey);
@@ -81,21 +136,18 @@ export function App() {
         };
     }, []);
 
-    // CHAPTER 3: Auto-trigger authentication when conditions are met
+    // Auto-trigger authentication when conditions are met (from Chapter 3)
     useEffect(() => {
         if (account && sessionKey && wsStatus === 'Connected' && !isAuthenticated && !isAuthAttempted) {
             setIsAuthAttempted(true);
-
-            // Generate fresh timestamp for this auth attempt
-            const expireTimestamp = String(Math.floor(Date.now() / 1000) + SESSION_DURATION);
-            setSessionExpireTimestamp(expireTimestamp);
+            const expireTimestamp = String(Math.floor(Date.now() / 1000) + SESSION_DURATION_SECONDS);
 
             const authParams: AuthRequestParams = {
                 wallet: account,
                 participant: sessionKey.address,
-                app_name: APP_NAME,
+                app_name: 'Nexus',
                 expire: expireTimestamp,
-                scope: AUTH_SCOPE,
+                scope: 'nexus.app',
                 application: account,
                 allowances: [],
             };
@@ -139,30 +191,28 @@ export function App() {
         }
     }, [isAuthenticated, sessionKey, account]);
 
-    // CHAPTER 3: Handle server messages for authentication
+    // This effect handles all incoming WebSocket messages.
     useEffect(() => {
         const handleMessage = async (data: any) => {
-            const response = parseAnyRPCResponse(JSON.stringify(data));
+            const rawEventData = JSON.stringify(data);
+            const response = NitroliteRPC.parseResponse(rawEventData);
 
-            // Handle auth challenge
-            if (
-                response.method === RPCMethod.AuthChallenge &&
-                walletClient &&
-                sessionKey &&
-                account &&
-                sessionExpireTimestamp
-            ) {
+            // Handle auth challenge (from Chapter 3)
+            if (response.method === RPCMethod.AuthChallenge && walletClient && sessionKey && account) {
                 const challengeResponse = response as AuthChallengeResponse;
+                const expireTimestamp = String(Math.floor(Date.now() / 1000) + SESSION_DURATION_SECONDS);
 
                 const authParams = {
-                    scope: AUTH_SCOPE,
+                    scope: 'nexus.app',
                     application: walletClient.account?.address as `0x${string}`,
                     participant: sessionKey.address as `0x${string}`,
-                    expire: sessionExpireTimestamp,
+                    expire: expireTimestamp,
                     allowances: [],
                 };
 
-                const eip712Signer = createEIP712AuthMessageSigner(walletClient, authParams, getAuthDomain());
+                const eip712Signer = createEIP712AuthMessageSigner(walletClient, authParams, {
+                    name: 'Nexus',
+                });
 
                 try {
                     const authVerifyPayload = await createAuthVerifyMessage(eip712Signer, challengeResponse);
@@ -173,7 +223,7 @@ export function App() {
                 }
             }
 
-            // Handle auth success
+            // Handle auth success (from Chapter 3)
             if (response.method === RPCMethod.AuthVerify && response.params?.success) {
                 setIsAuthenticated(true);
                 if (response.params.jwtToken) storeJWT(response.params.jwtToken);
@@ -215,10 +265,9 @@ export function App() {
                 setBalances(balancesMap);
             }
 
-            // Handle errors
+            // Handle errors (from Chapter 3)
             if (response.method === RPCMethod.Error) {
                 removeJWT();
-                // Clear session key on auth failure to regenerate next time
                 removeSessionKey();
                 alert(`Authentication failed: ${response.params.error}`);
                 setIsAuthAttempted(false);
@@ -227,7 +276,7 @@ export function App() {
 
         webSocketService.addMessageListener(handleMessage);
         return () => webSocketService.removeMessageListener(handleMessage);
-    }, [walletClient, sessionKey, sessionExpireTimestamp, account]);
+    }, [walletClient, sessionKey, account]);
 
     const connectWallet = async () => {
         if (!window.ethereum) {
@@ -241,7 +290,6 @@ export function App() {
         });
         const [address] = await tempClient.requestAddresses();
 
-        // CHAPTER 3: Create wallet client with account for EIP-712 signing
         const walletClient = createWalletClient({
             account: address,
             chain: mainnet,
@@ -252,14 +300,18 @@ export function App() {
         setAccount(address);
     };
 
-    const formatAddress = (address: Address) => `${address.slice(0, 6)}...${address.slice(-4)}`;
+    const formatAddress = (address: Address) => {
+        return `${address.slice(0, 6)}...${address.slice(-4)}`;
+    };
 
     return (
         <div className="app-container">
             <header className="header">
                 <div className="header-content">
                     <h1 className="logo">Nexus</h1>
-                    <p className="tagline">Decentralized insights for the next generation of builders</p>
+                    <p className="tagline">
+                        <span>The Content Platform of Tomorrow</span>
+                    </p>
                 </div>
                 <div className="header-controls">
                     {/* CHAPTER 4: Display balance when authenticated */}
@@ -276,11 +328,15 @@ export function App() {
                     </div>
                     <div className="wallet-connector">
                         {account ? (
-                            <div className="wallet-info">Connected: {formatAddress(account)}</div>
-                        ) : (
-                            <button onClick={connectWallet} className="connect-button">
-                                Connect Wallet
+                            <button
+                                onClick={() => {
+                                    /* Disconnect logic can be added here */
+                                }}
+                            >
+                                {formatAddress(account)}
                             </button>
+                        ) : (
+                            <button onClick={connectWallet}>Connect Wallet</button>
                         )}
                     </div>
                 </div>
@@ -293,3 +349,51 @@ export function App() {
         </div>
     );
 }
+```
+
+## Expected Outcome
+
+As soon as the user's session is authenticated, the application will automatically make a background request to fetch their balances. A new "Balance" component will appear in the header, displaying their current USDC balance (e.g., "100.00 USDC"). This entire process happens instantly and without any further action required from the user, demonstrating the power of session keys.
+
+### What You'll See:
+
+1. **Loading State**: "Loading... USDC" appears briefly while fetching balances
+2. **Balance Display**: Real balance appears (e.g., "0.52 USDC")
+3. **Real-time Updates**: Balance updates automatically when server pushes changes
+4. **Console Logs**: Educational messages in browser console showing the process
+
+### For Beginners: What's Happening Behind the Scenes?
+
+- **Session Key**: Like a temporary ID card that lets your app make requests without asking you to sign every time
+- **WebSocket**: Real-time connection that lets the server push updates to your app instantly
+- **Balance Request**: Your app asks "What's in my wallet?" using cryptographic proof
+- **Data Transformation**: Converting server response format to something easy for your UI to use
+
+## Optional: CSS Styling for BalanceDisplay
+
+If you want to style the `BalanceDisplay` component, create the following CSS module file:
+
+```css
+/* filepath: src/components/BalanceDisplay/BalanceDisplay.module.css */
+.balanceContainer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background-color: var(--surface);
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.balanceAmount {
+    font-weight: 600;
+}
+
+.balanceSymbol {
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+```

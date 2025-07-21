@@ -1,0 +1,21 @@
+.balanceContainer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: "JetBrains Mono", monospace;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background-color: var(--surface);
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.balanceAmount {
+    font-weight: 600;
+}
+
+.balanceSymbol {
+    font-weight: 400;
+    color: var(--text-secondary);
+}
