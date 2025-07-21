@@ -15,10 +15,13 @@ import {
     createGetLedgerBalancesMessage,
     type GetLedgerBalancesResponse,
     type BalanceUpdateResponse,
+    type TransferResponse,
 } from '@erc7824/nitrolite';
 import { PostList } from './components/PostList/PostList';
 // CHAPTER 4: Import the new BalanceDisplay component
 import { BalanceDisplay } from './components/BalanceDisplay/BalanceDisplay';
+// FINAL: Import useTransfer hook
+import { useTransfer } from './hooks/useTransfer';
 import { posts } from './data/posts';
 import { webSocketService, type WsStatus } from './lib/websocket';
 // CHAPTER 3: Authentication utilities
@@ -61,6 +64,13 @@ export function App() {
     const [balances, setBalances] = useState<Record<string, string> | null>(null);
     // CHAPTER 4: Add loading state for better user experience
     const [isLoadingBalances, setIsLoadingBalances] = useState(false);
+    
+    // FINAL: Add transfer state
+    const [isTransferring, setIsTransferring] = useState(false);
+    const [transferStatus, setTransferStatus] = useState<string | null>(null);
+    
+    // FINAL: Use transfer hook
+    const { handleTransfer: transferFn } = useTransfer(sessionKey, isAuthenticated);
 
     useEffect(() => {
         // CHAPTER 3: Get or generate session key on startup (IMPORTANT: Store in localStorage)
@@ -139,6 +149,24 @@ export function App() {
         }
     }, [isAuthenticated, sessionKey, account]);
 
+    // FINAL: Handle support function for PostList
+    const handleSupport = async (recipient: string, amount: string) => {
+        setIsTransferring(true);
+        setTransferStatus('Sending support...');
+        
+        const result = await transferFn(recipient as Address, amount);
+        
+        if (result.success) {
+            setTransferStatus('Support sent!');
+        } else {
+            setIsTransferring(false);
+            setTransferStatus(null);
+            if (result.error) {
+                alert(result.error);
+            }
+        }
+    };
+
     // CHAPTER 3: Handle server messages for authentication
     useEffect(() => {
         const handleMessage = async (data: any) => {
@@ -215,41 +243,78 @@ export function App() {
                 setBalances(balancesMap);
             }
 
+            // FINAL: Handle transfer response
+            if (response.method === RPCMethod.Transfer) {
+                const transferResponse = response as TransferResponse;
+                console.log('Transfer completed:', transferResponse.params);
+                
+                setIsTransferring(false);
+                setTransferStatus(null);
+                
+                alert(`Transfer completed successfully!`);
+            }
+
             // Handle errors
             if (response.method === RPCMethod.Error) {
-                removeJWT();
-                // Clear session key on auth failure to regenerate next time
-                removeSessionKey();
-                alert(`Authentication failed: ${response.params.error}`);
-                setIsAuthAttempted(false);
+                console.error('RPC Error:', response.params);
+                
+                if (isTransferring) {
+                    setIsTransferring(false);
+                    setTransferStatus(null);
+                    alert(`Transfer failed: ${response.params.error}`);
+                } else {
+                    // Other errors (like auth failures)
+                    removeJWT();
+                    removeSessionKey();
+                    alert(`Error: ${response.params.error}`);
+                    setIsAuthAttempted(false);
+                }
             }
         };
 
         webSocketService.addMessageListener(handleMessage);
         return () => webSocketService.removeMessageListener(handleMessage);
-    }, [walletClient, sessionKey, sessionExpireTimestamp, account]);
+    }, [walletClient, sessionKey, sessionExpireTimestamp, account, isTransferring]);
 
     const connectWallet = async () => {
         if (!window.ethereum) {
-            alert('Please install MetaMask!');
+            alert('MetaMask not found! Please install MetaMask from https://metamask.io/');
             return;
         }
 
-        const tempClient = createWalletClient({
-            chain: mainnet,
-            transport: custom(window.ethereum),
-        });
-        const [address] = await tempClient.requestAddresses();
+        try {
+            // Check current network
+            const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+            if (chainId !== '0x1') { // Not mainnet
+                alert('Please switch to Ethereum Mainnet in MetaMask for this workshop');
+                // Note: In production, you might want to automatically switch networks
+            }
 
-        // CHAPTER 3: Create wallet client with account for EIP-712 signing
-        const walletClient = createWalletClient({
-            account: address,
-            chain: mainnet,
-            transport: custom(window.ethereum),
-        });
+            const tempClient = createWalletClient({
+                chain: mainnet,
+                transport: custom(window.ethereum),
+            });
+            const [address] = await tempClient.requestAddresses();
 
-        setWalletClient(walletClient);
-        setAccount(address);
+            if (!address) {
+                alert('No wallet address found. Please ensure MetaMask is unlocked.');
+                return;
+            }
+
+            // CHAPTER 3: Create wallet client with account for EIP-712 signing
+            const walletClient = createWalletClient({
+                account: address,
+                chain: mainnet,
+                transport: custom(window.ethereum),
+            });
+
+            setWalletClient(walletClient);
+            setAccount(address);
+        } catch (error) {
+            console.error('Wallet connection failed:', error);
+            alert('Failed to connect wallet. Please try again.');
+            return;
+        }
     };
 
     const formatAddress = (address: Address) => `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -266,7 +331,7 @@ export function App() {
                     {isAuthenticated && (
                         <BalanceDisplay
                             balance={
-                                isLoadingBalances ? 'Loading...' : (balances?.['usdc'] ?? balances?.['USDC'] ?? null)
+                                isLoadingBalances ? 'Loading...' : (balances?.['usdc'] ?? null)
                             }
                             symbol="USDC"
                         />
@@ -287,8 +352,22 @@ export function App() {
             </header>
 
             <main className="main-content">
+                
+                {/* FINAL: Status message for transfers */}
+                {transferStatus && (
+                    <div className="transfer-status">
+                        {transferStatus}
+                    </div>
+                )}
+                
                 {/* CHAPTER 4: Pass authentication state to enable balance-dependent features */}
-                <PostList posts={posts} isWalletConnected={!!account} isAuthenticated={isAuthenticated} />
+                <PostList 
+                    posts={posts} 
+                    isWalletConnected={!!account} 
+                    isAuthenticated={isAuthenticated}
+                    onTransfer={handleSupport}
+                    isTransferring={isTransferring}
+                />
             </main>
         </div>
     );

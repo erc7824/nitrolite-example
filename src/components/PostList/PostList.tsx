@@ -1,18 +1,31 @@
 import { type Post } from '../../data/posts';
+import { users } from '../../data/users';
 import styles from './PostList.module.css';
 
 interface PostListProps {
     posts: Post[];
     isWalletConnected: boolean;
     isAuthenticated: boolean;
+    onTransfer?: (recipient: string, amount: string) => Promise<void>;
+    isTransferring?: boolean;
 }
 
-export function PostList({ posts, isWalletConnected, isAuthenticated }: PostListProps) {
-    const handleTip = (post: Post) => {
-        // --- WORKSHOP: INSTANT TIP LOGIC ---
-        // This is where we'll implement the instant tip functionality
-        // using the sessionSigner to send 1 USDC to the post author
-        console.log('Tipping post:', post.id, 'by', post.authorName);
+export function PostList({ posts, isWalletConnected, isAuthenticated, onTransfer, isTransferring }: PostListProps) {
+    const handleTip = async (post: Post) => {
+        if (!onTransfer) {
+            console.log('Transfer function not available');
+            return;
+        }
+
+        // Find the author's wallet address from users data
+        const author = users.find(user => user.id === post.authorId);
+        if (!author) {
+            console.error('Author wallet address not found');
+            return;
+        }
+
+        console.log(`Supporting ${post.authorName} with 0.01 USDC`);
+        await onTransfer(author.walletAddress, '0.01');
     };
 
     const formatDate = (dateString: string) => {
@@ -59,7 +72,7 @@ export function PostList({ posts, isWalletConnected, isAuthenticated }: PostList
                                     <div className={styles.buttons}>
                                         <button
                                             className={styles.supportButton}
-                                            disabled={!isWalletConnected || !isAuthenticated}
+                                            disabled={!isWalletConnected || !isAuthenticated || isTransferring}
                                             onClick={(e) => {
                                                 e.preventDefault();
                                                 handleTip(post);
@@ -69,7 +82,9 @@ export function PostList({ posts, isWalletConnected, isAuthenticated }: PostList
                                                 ? 'Connect Wallet'
                                                 : !isAuthenticated
                                                   ? 'Authenticating...'
-                                                  : 'Support'}
+                                                  : isTransferring
+                                                    ? 'Supporting...'
+                                                    : 'Support 0.01 USDC'}
                                         </button>
                                     </div>
                                 </div>
