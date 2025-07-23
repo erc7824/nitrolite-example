@@ -41,6 +41,8 @@ In this workshop, we will use a sample content platform application as a practic
 3.  **Set up environment variables:**
     Create a file named `.env.local` in the root of the project and add your Nitrolite WebSocket URL:
 
+    TODO: Specify the clearnode RPC or add link on how to set up a local Clearnode instance.
+
     ```env
     # .env.local
     VITE_NITROLITE_WS_URL=wss://your-rpc-endpoint.com/ws

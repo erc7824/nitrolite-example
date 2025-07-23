@@ -68,6 +68,7 @@ class WebSocketService {
         };
         this.socket.onmessage = (event) => {
             try {
+                // TODO: It's better to use provided RPC parser from Nitrolite SDK, and since it parses the string -- do not use JSON.parse directly.
                 const data = JSON.parse(event.data);
                 this.messageListeners.forEach((listener) => listener(data));
             } catch (error) {
@@ -79,6 +80,8 @@ class WebSocketService {
     }
 
     public send(method: string, params: any) {
+        // TODO: requestId increment might be dangerous (because of lack of mutex), consider using timestamp
+        // And use request constructor from Nitrolite SDK: NitroliteRPC.createRequest(...);
         const payload = JSON.stringify({ jsonrpc: '2.0', id: this.requestId++, method, params });
         if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(payload);
         else this.messageQueue.push(payload);
@@ -242,7 +245,9 @@ Before running the application, make sure to set the WebSocket URL in your `.env
 
 ```bash
 # Nitrolite Configuration
+#TODO: Specify somewhere that this is a Clearnode RPC, that was used to open a channel
 VITE_NITROLITE_WS_URL=wss://clearnet.yellow.com/ws
+# TODO: what is this URL?
 VITE_NITROLITE_API_URL=http://localhost:8080
 
 # Application Configuration
