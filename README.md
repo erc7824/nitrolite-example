@@ -53,14 +53,8 @@ In this workshop, we will use a sample content platform application as a practic
 This repository uses branches to guide you through the workshop. You can switch between branches to see the code evolve at each stage.
 
 -   `main`: The initial project setup.
--   `chapter-1-wallet-connect`: Solution for Chapter 1 (Connecting to a user's wallet).
--   `chapter-2-ws-connection`: Solution for Chapter 2 (Initializing the WebSocket connection).
--   `chapter-3-session-auth`: Solution for Chapter 3 (Authenticating the session via WebSocket).
--   `chapter-4-display-balances`: Solution for Chapter 4 (Fetching and displaying asset balances).
--   `final-p2p-transfer`: The final, completed application with peer-to-peer transfers.
-
-## Note for Presenters
-
-A special `presenter` branch is available for conducting the live workshop.
-
-This branch contains the final, completed code, but the logic for **Chapter 3 onwards** is commented out in sequential blocks. To present, stay on this branch and uncomment each block as you progress through the workshop. This ensures a smooth, typo-free demonstration. The `chapter-*` branches serve as clean checkpoints for attendees.
+-   [`chapter-1-wallet-connect`](https://github.com/erc7824/nitrolite-example/blob/chapter-1-wallet-connect/docs/chapter-1-wallet-connect.md): Solution for Chapter 1 (Connecting to a user's wallet).
+-   [`chapter-2-ws-connection`](https://github.com/erc7824/nitrolite-example/blob/chapter-2-ws-connection/docs/chapter-2-ws-connection.md): Solution for Chapter 2 (Initializing the WebSocket connection).
+-   [`chapter-3-session-auth`](https://github.com/erc7824/nitrolite-example/blob/chapter-3-session-auth/docs/chapter-3-session-auth.md): Solution for Chapter 3 (Authenticating the session via WebSocket).
+-   [`chapter-4-display-balances`](https://github.com/erc7824/nitrolite-example/blob/chapter-4-display-balances/docs/chapter-4-display-balances.md): Solution for Chapter 4 (Fetching and displaying asset balances).
+-   [`final-p2p-transfer`](https://github.com/erc7824/nitrolite-example/blob/final-p2p-transfer/docs/final-p2p-transfer.md): The final, completed application with peer-to-peer transfers.
