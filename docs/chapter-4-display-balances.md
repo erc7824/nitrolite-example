@@ -68,6 +68,11 @@ export function BalanceDisplay({ balance, symbol }: BalanceDisplayProps) {
 
 This is the final step. We'll add the logic to fetch and display the balances.
 
+TODO: consider continue using incremental approach, because right now there are too many lines of code
+and they are blending with previous chapters' changes.
+\+ consider moving balances logic into separate hook.
+\++ consider moving auth logic into separate hook.
+
 ```tsx
 // filepath: src/App.tsx
 import { useState, useEffect } from 'preact/hooks';
@@ -189,14 +194,18 @@ export function App() {
                     // In a real app, you might show a user-friendly error message here
                 });
         }
+    // TODO: again, these dependencies are very similar and become true at the same time, consider using a single effect
     }, [isAuthenticated, sessionKey, account]);
 
     // This effect handles all incoming WebSocket messages.
     useEffect(() => {
         const handleMessage = async (data: any) => {
+            // TODO: make data as a string and avoid stringifiying and parsing it multiple times
             const rawEventData = JSON.stringify(data);
+            // TODO: this method is outdated, use rpcResponseParser.authChallenge
             const response = NitroliteRPC.parseResponse(rawEventData);
 
+            // TODO: that's not a method from the previous chapter (previous was better)
             // Handle auth challenge (from Chapter 3)
             if (response.method === RPCMethod.AuthChallenge && walletClient && sessionKey && account) {
                 const challengeResponse = response as AuthChallengeResponse;
@@ -231,6 +240,7 @@ export function App() {
 
             // CHAPTER 4: Handle balance responses (when we asked for balances)
             if (response.method === RPCMethod.GetLedgerBalances) {
+                // TODO: usually linter will know the type of response, so manually casting is not needed
                 const balanceResponse = response as GetLedgerBalancesResponse;
                 console.log('Received balance response:', balanceResponse.params);
 
@@ -267,6 +277,7 @@ export function App() {
 
             // Handle errors (from Chapter 3)
             if (response.method === RPCMethod.Error) {
+                // TODO: that's just very "panicish" error handling, consider using a more user-friendly approach
                 removeJWT();
                 removeSessionKey();
                 alert(`Authentication failed: ${response.params.error}`);

@@ -33,6 +33,8 @@ sequenceDiagram
     App->>App: 9. Enable authenticated features
 ```
 
+TODO: add a separate diagram for the JWT re-authentication flow.
+
 ## Key Tasks
 
 1. **Create Helper Utilities**: Build simple helpers for session keys and JWT storage.
@@ -52,6 +54,7 @@ npm install @erc7824/nitrolite
 ### 2. Create Helper Utilities
 
 Create `src/lib/utils.ts` with session key generation and JWT helpers:
+TODO: explain what is a session key and why we need it. Or leave url to the docs.
 
 ```typescript
 // filepath: src/lib/utils.ts
@@ -287,6 +290,7 @@ useEffect(() => {
             webSocketService.send(payload);
         });
     }
+// TODO: too much dependencies, it might cause message spam (e.g. when session key and account become true at the same time)
 }, [account, sessionKey, wsStatus, isAuthenticated, isAuthAttempted]);
 ```
 
@@ -305,6 +309,7 @@ useEffect(() => {
             response.method === RPCMethod.AuthChallenge &&
             walletClient &&
             sessionKey &&
+            // TODO: account is not needed here
             account &&
             sessionExpireTimestamp
         ) {
@@ -347,6 +352,7 @@ useEffect(() => {
 
     webSocketService.addMessageListener(handleMessage);
     return () => webSocketService.removeMessageListener(handleMessage);
+    // Again, too many dependencies might cause unpredictable behavior, consider adding message listener only once on mount (perhaps use ref)
 }, [walletClient, sessionKey, sessionExpireTimestamp, account]);
 ```
 

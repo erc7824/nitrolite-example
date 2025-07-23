@@ -48,6 +48,7 @@ npm install viem
 First, modify `src/components/PostList/PostList.tsx` to accept a prop `isWalletConnected` and use it to enable or disable a new "Sponsor" button.
 
 ```tsx
+// TODO: I would add an alias (`@/`) to the `tsconfig.json` to avoid relative imports and improve readability.
 // filepath: src/components/PostList/PostList.tsx
 import { type Post } from '../../data/posts';
 import styles from './PostList.module.css';
@@ -176,6 +177,7 @@ Finally, modify `src/App.tsx` to manage the `walletClient` and `account` state, 
 // filepath: src/App.tsx
 import { useState } from 'preact/hooks';
 import { createWalletClient, custom, type Address, type WalletClient } from 'viem';
+// TODO: specify that we are using only the mainnet chain or move to a separate file for chains, to easily change it.
 import { mainnet } from 'viem/chains';
 import { PostList } from './components/PostList/PostList';
 import { posts } from './data/posts';
@@ -201,6 +203,7 @@ export function App() {
     const formatAddress = (address: Address) => `${address.slice(0, 6)}...${address.slice(-4)}`;
 
     return (
+        // TODO: either use styles as a string or as an imported object. Because it looks strange to have different styles usage in neighboring code snippets
         <div className="app-container">
             <header className="header">
                 <div className="header-content">
