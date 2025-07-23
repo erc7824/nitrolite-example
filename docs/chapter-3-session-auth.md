@@ -41,6 +41,8 @@ sequenceDiagram
 
 ## Implementation Steps
 
+> **Important Note**: Replace placeholder values like "Your App Name", "your_app_name", and "your-app.com" with your actual application details throughout the code examples below.
+
 ### 1. Install Nitrolite SDK
 
 ```bash
@@ -62,7 +64,7 @@ export interface SessionKey {
 }
 
 // Session key management
-const SESSION_KEY_STORAGE = 'nexus_session_key';
+const SESSION_KEY_STORAGE = 'your_app_name_session_key';
 
 export const generateSessionKey = (): SessionKey => {
     const privateKey = generatePrivateKey();
@@ -101,7 +103,7 @@ export const removeSessionKey = (): void => {
 };
 
 // JWT helpers
-const JWT_KEY = 'nexus_jwt_token';
+const JWT_KEY = 'your_app_name_jwt_token';
 
 export const getStoredJWT = (): string | null => {
     try {
@@ -175,14 +177,14 @@ import {
 Add this function after your imports:
 
 ```typescript
-// CHAPTER 3: EIP-712 domain for Nexus authentication
+// CHAPTER 3: EIP-712 domain for authentication
 const getAuthDomain = () => ({
-    name: 'Nexus',
+    name: 'Your App Name',
 });
 
 // CHAPTER 3: Authentication constants
-const AUTH_SCOPE = 'nexus.app';
-const APP_NAME = 'Nexus';
+const AUTH_SCOPE = 'your-app.com';
+const APP_NAME = 'Your App Name';
 const SESSION_DURATION = 3600; // 1 hour
 ```
 
@@ -256,6 +258,8 @@ useEffect(() => {
 > **Why this is important:** Session keys must be stored in localStorage with the private key included. This prevents regenerating new keys on every page refresh, which would break authentication continuity.
 
 #### 4.6 Add Auto-Authentication Logic
+
+> **Critical**: The `expire` timestamp must be **exactly the same** in both `auth_request` and `auth_verify` messages. Generate it once and reuse it throughout the entire authentication flow. Mismatched timestamps (e.g., `1672531200` vs `1672531201`) will cause authentication to fail.
 
 Add this useEffect for automatic authentication:
 
