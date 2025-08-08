@@ -143,8 +143,8 @@ export function App() {
             const expireTimestamp = String(Math.floor(Date.now() / 1000) + SESSION_DURATION_SECONDS);
 
             const authParams: AuthRequestParams = {
-                wallet: account,
-                participant: sessionKey.address,
+                address: account,
+                session_key: sessionKey.address,
                 app_name: 'Nexus',
                 expire: expireTimestamp,
                 scope: 'nexus.app',
@@ -194,8 +194,7 @@ export function App() {
     // This effect handles all incoming WebSocket messages.
     useEffect(() => {
         const handleMessage = async (data: any) => {
-            const rawEventData = JSON.stringify(data);
-            const response = NitroliteRPC.parseResponse(rawEventData);
+            const response = parseAnyRPCResponse(JSON.stringify(data));
 
             // Handle auth challenge (from Chapter 3)
             if (response.method === RPCMethod.AuthChallenge && walletClient && sessionKey && account) {
@@ -232,15 +231,17 @@ export function App() {
             // CHAPTER 4: Handle balance responses (when we asked for balances)
             if (response.method === RPCMethod.GetLedgerBalances) {
                 const balanceResponse = response as GetLedgerBalancesResponse;
-                console.log('Received balance response:', balanceResponse.params);
+                const balances = balanceResponse.params.ledgerBalances;
+
+                console.log('Received balance response:', balances);
 
                 // Check if we actually got balance data back
-                if (balanceResponse.params && balanceResponse.params.length > 0) {
+                if (balances && balances.length > 0) {
                     // CHAPTER 4: Transform the data for easier use in our UI
                     // Convert from: [{asset: "usdc", amount: "100"}, {asset: "eth", amount: "0.5"}]
                     // To: {"usdc": "100", "eth": "0.5"}
                     const balancesMap = Object.fromEntries(
-                        balanceResponse.params.map((balance) => [balance.asset, balance.amount]),
+                        balances.map((balance) => [balance.asset, balance.amount]),
                     );
                     console.log('Setting balances:', balancesMap);
                     setBalances(balancesMap);
@@ -255,11 +256,13 @@ export function App() {
             // CHAPTER 4: Handle live balance updates (server pushes these automatically)
             if (response.method === RPCMethod.BalanceUpdate) {
                 const balanceUpdate = response as BalanceUpdateResponse;
-                console.log('Live balance update received:', balanceUpdate.params);
+                const balances = balanceUpdate.params.balanceUpdates;
+                
+                console.log('Live balance update received:', balances);
 
                 // Same data transformation as above
                 const balancesMap = Object.fromEntries(
-                    balanceUpdate.params.map((balance) => [balance.asset, balance.amount]),
+                    balances.map((balance) => [balance.asset, balance.amount]),
                 );
                 console.log('Updating balances in real-time:', balancesMap);
                 setBalances(balancesMap);
