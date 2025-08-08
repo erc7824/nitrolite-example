@@ -80,8 +80,8 @@ export function App() {
             setSessionExpireTimestamp(expireTimestamp);
 
             const authParams: AuthRequestParams = {
-                wallet: account,
-                participant: sessionKey.address,
+                address: account,
+                session_key: sessionKey.address,
                 app_name: APP_NAME,
                 expire: expireTimestamp,
                 scope: AUTH_SCOPE,
