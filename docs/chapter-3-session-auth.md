@@ -274,8 +274,8 @@ useEffect(() => {
         setSessionExpireTimestamp(expireTimestamp);
 
         const authParams: AuthRequestParams = {
-            wallet: account,
-            participant: sessionKey.address,
+            address: account,
+            session_key: sessionKey.address,
             app_name: APP_NAME,
             expire: expireTimestamp,
             scope: AUTH_SCOPE,
@@ -383,7 +383,7 @@ export function PostList({ posts, isWalletConnected, isAuthenticated }: PostList
 
 #### 5.3 Update Button Logic
 
-```typescript
+```tsx
 <button
     className={styles.supportButton}
     disabled={!isWalletConnected || !isAuthenticated}
