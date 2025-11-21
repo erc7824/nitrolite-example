@@ -176,7 +176,7 @@ select {
     background-color: #da3633;
 }
 
-/* FINAL: Transfer status styles */
+/* CHAPTER 5: App session status styles (replaces transfer status) */
 .transfer-status {
     text-align: center;
     padding: 1rem;

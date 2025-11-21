@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import { createWalletClient, custom, type Address, type WalletClient } from 'viem';
 import { mainnet } from 'viem/chains';
 // CHAPTER 3: Authentication imports
@@ -15,13 +15,15 @@ import {
     createGetLedgerBalancesMessage,
     type GetLedgerBalancesResponse,
     type BalanceUpdateResponse,
-    type TransferResponse,
+    type CreateAppSessionResponse,
+    type CloseAppSessionResponse,
 } from '@erc7824/nitrolite';
 import { PostList } from './components/PostList/PostList';
 // CHAPTER 4: Import the new BalanceDisplay component
 import { BalanceDisplay } from './components/BalanceDisplay/BalanceDisplay';
-// FINAL: Import useTransfer hook
-import { useTransfer } from './hooks/useTransfer';
+// CHAPTER 5: Import app session hooks
+import { useCreateAppSession } from './hooks/useCreateAppSession';
+import { useCloseAppSession } from './hooks/useCloseAppSession';
 import { posts } from './data/posts';
 import { webSocketService, type WsStatus } from './lib/websocket';
 // CHAPTER 3: Authentication utilities
@@ -65,12 +67,18 @@ export function App() {
     // CHAPTER 4: Add loading state for better user experience
     const [isLoadingBalances, setIsLoadingBalances] = useState(false);
     
-    // FINAL: Add transfer state
-    const [isTransferring, setIsTransferring] = useState(false);
-    const [transferStatus, setTransferStatus] = useState<string | null>(null);
-    
-    // FINAL: Use transfer hook
-    const { handleTransfer: transferFn } = useTransfer(sessionKey, isAuthenticated);
+    // CHAPTER 5: Add app session state
+    const [appSessionId, setAppSessionId] = useState<string | null>(null);
+    const [isCreatingSession, setIsCreatingSession] = useState(false);
+    const [isClosingSession, setIsClosingSession] = useState(false);
+    const [appSessionStatus, setAppSessionStatus] = useState<string | null>(null);
+
+    // CHAPTER 5: Use ref to track pending close (survives async state updates)
+    const pendingCloseRef = useRef<{ recipient: string; amount: string; sessionData: string } | null>(null);
+
+    // CHAPTER 5: Use app session hooks
+    const { createAppSession } = useCreateAppSession(sessionKey, isAuthenticated);
+    const { closeAppSession } = useCloseAppSession(sessionKey, isAuthenticated);
 
     useEffect(() => {
         // CHAPTER 3: Get or generate session key on startup (IMPORTANT: Store in localStorage)
@@ -82,6 +90,7 @@ export function App() {
             storeSessionKey(newSessionKey);
             setSessionKey(newSessionKey);
         }
+
 
         webSocketService.addStatusListener(setWsStatus);
         webSocketService.connect();
@@ -149,23 +158,46 @@ export function App() {
         }
     }, [isAuthenticated, sessionKey, account]);
 
-    // FINAL: Handle support function for PostList
+    // CHAPTER 5: Handle support function for PostList using app sessions
     const handleSupport = async (recipient: string, amount: string) => {
-        setIsTransferring(true);
-        setTransferStatus('Sending support...');
-        
-        const result = await transferFn(recipient as Address, amount);
-        
-        if (result.success) {
-            setTransferStatus('Support sent!');
-        } else {
-            setIsTransferring(false);
-            setTransferStatus(null);
+        if (!account) {
+            alert('Please connect your wallet first');
+            return;
+        }
+
+        // Create new app session
+        setIsCreatingSession(true);
+        setAppSessionStatus('Sending support...');
+
+        const sessionData = JSON.stringify({
+            type: 'support',
+            recipient: recipient,
+            amount: amount,
+            timestamp: Date.now(),
+        });
+
+        // Store recipient, amount, and sessionData in ref for immediate close after create
+        pendingCloseRef.current = { recipient, amount, sessionData };
+
+        const result = await createAppSession({
+            from: account,
+            to: recipient,
+            amount: amount,
+            sessionData,
+            application: 'clearnode',
+            challenge: 0,
+        });
+
+        if (!result.success) {
+            setIsCreatingSession(false);
+            setAppSessionStatus(null);
+            pendingCloseRef.current = null;
             if (result.error) {
-                alert(result.error);
+                alert(`Failed to create session: ${result.error}`);
             }
         }
     };
+
 
     // CHAPTER 3: Handle server messages for authentication
     useEffect(() => {
@@ -247,25 +279,91 @@ export function App() {
                 setBalances(balancesMap);
             }
 
-            // FINAL: Handle transfer response
-            if (response.method === RPCMethod.Transfer) {
-                const transferResponse = response as TransferResponse;
-                console.log('Transfer completed:', transferResponse.params);
-                
-                setIsTransferring(false);
-                setTransferStatus(null);
-                
-                alert(`Transfer completed successfully!`);
+            // CHAPTER 5: Handle create app session response
+            if (response.method === RPCMethod.CreateAppSession) {
+                const createSessionResponse = response as CreateAppSessionResponse;
+                console.log('App session created:', createSessionResponse.params);
+
+                const pendingClose = pendingCloseRef.current;
+                if (createSessionResponse.params.appSessionId && pendingClose && account) {
+                    const sessionId = createSessionResponse.params.appSessionId;
+                    setAppSessionId(sessionId);
+
+                    // Immediately close the session to complete the transfer
+                    setIsCreatingSession(false);
+                    setIsClosingSession(true);
+
+                    console.log('Immediately closing session with:', {
+                        sessionId,
+                        recipient: pendingClose.recipient,
+                        amount: pendingClose.amount,
+                        sessionData: pendingClose.sessionData,
+                    });
+
+                    const closeSessionData = JSON.stringify({
+                        type: 'support_complete',
+                        recipient: pendingClose.recipient,
+                        amount: pendingClose.amount,
+                        timestamp: Date.now(),
+                        completed: true,
+                    });
+
+                    closeAppSession(
+                        sessionId,
+                        [
+                            {
+                                participant: account,
+                                asset: 'usdc',
+                                amount: '0', // A gets nothing
+                            },
+                            {
+                                participant: pendingClose.recipient,
+                                asset: 'usdc',
+                                amount: pendingClose.amount, // B gets all the funds
+                            },
+                        ],
+                        closeSessionData
+                    ).catch((error) => {
+                        console.error('Failed to close session:', error);
+                        setIsClosingSession(false);
+                        setAppSessionStatus(null);
+                        pendingCloseRef.current = null;
+                        alert('Failed to close session');
+                    });
+                }
+            }
+
+            // CHAPTER 5: Handle close app session response
+            if (response.method === RPCMethod.CloseAppSession) {
+                const closeSessionResponse = response as CloseAppSessionResponse;
+                console.log('App session closed:', closeSessionResponse.params);
+
+                setAppSessionId(null);
+                pendingCloseRef.current = null;
+
+                setIsClosingSession(false);
+                setAppSessionStatus('Support sent!');
+
+                // Clear status after a delay
+                setTimeout(() => {
+                    setAppSessionStatus(null);
+                }, 3000);
             }
 
             // Handle errors
             if (response.method === RPCMethod.Error) {
                 console.error('RPC Error:', response.params);
-                
-                if (isTransferring) {
-                    setIsTransferring(false);
-                    setTransferStatus(null);
-                    alert(`Transfer failed: ${response.params.error}`);
+
+                if (isCreatingSession) {
+                    setIsCreatingSession(false);
+                    setAppSessionStatus(null);
+                    pendingCloseRef.current = null;
+                    alert(`App session creation failed: ${response.params.error}`);
+                } else if (isClosingSession) {
+                    setIsClosingSession(false);
+                    setAppSessionStatus(null);
+                    pendingCloseRef.current = null;
+                    alert(`App session closure failed: ${response.params.error}`);
                 } else {
                     // Other errors (like auth failures)
                     removeJWT();
@@ -278,7 +376,7 @@ export function App() {
 
         webSocketService.addMessageListener(handleMessage);
         return () => webSocketService.removeMessageListener(handleMessage);
-    }, [walletClient, sessionKey, sessionExpireTimestamp, account, isTransferring]);
+    }, [walletClient, sessionKey, sessionExpireTimestamp, account, isCreatingSession, isClosingSession]);
 
     const connectWallet = async () => {
         if (!window.ethereum) {
@@ -356,21 +454,20 @@ export function App() {
             </header>
 
             <main className="main-content">
-                
-                {/* FINAL: Status message for transfers */}
-                {transferStatus && (
+                {/* CHAPTER 5: Status message for app sessions */}
+                {appSessionStatus && (
                     <div className="transfer-status">
-                        {transferStatus}
+                        {appSessionStatus}
                     </div>
                 )}
                 
-                {/* CHAPTER 4: Pass authentication state to enable balance-dependent features */}
-                <PostList 
-                    posts={posts} 
-                    isWalletConnected={!!account} 
+                {/* CHAPTER 5: Pass authentication state and app session handler */}
+                <PostList
+                    posts={posts}
+                    isWalletConnected={!!account}
                     isAuthenticated={isAuthenticated}
                     onTransfer={handleSupport}
-                    isTransferring={isTransferring}
+                    isTransferring={isCreatingSession || isClosingSession}
                 />
             </main>
         </div>
