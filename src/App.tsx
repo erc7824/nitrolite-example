@@ -1,376 +1,396 @@
-import { useState, useEffect } from 'preact/hooks';
-import { createWalletClient, custom, type Address, type WalletClient } from 'viem';
-import { mainnet } from 'viem/chains';
-// CHAPTER 3: Authentication imports
-// CHAPTER 4: Add balance fetching imports
-import {
-    createAuthRequestMessage,
-    createAuthVerifyMessage,
-    createEIP712AuthMessageSigner,
-    parseAnyRPCResponse,
-    RPCMethod,
-    type AuthChallengeResponse,
-    type AuthRequestParams,
-    createECDSAMessageSigner,
-    createGetLedgerBalancesMessage,
-    type GetLedgerBalancesResponse,
-    type BalanceUpdateResponse,
-    type TransferResponse,
-} from '@erc7824/nitrolite';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'preact/hooks';
+import { createWalletClient, custom, type Address, type WalletClient, parseUnits } from 'viem';
+import { sepolia } from 'viem/chains';
+import { NitroliteClient, EventPoller, type EventPollerCallbacks, type ClearNodeAsset } from '@erc7824/nitrolite-compat';
 import { PostList } from './components/PostList/PostList';
-// CHAPTER 4: Import the new BalanceDisplay component
 import { BalanceDisplay } from './components/BalanceDisplay/BalanceDisplay';
-// FINAL: Import useTransfer hook
-import { useTransfer } from './hooks/useTransfer';
 import { posts } from './data/posts';
-import { webSocketService, type WsStatus } from './lib/websocket';
-// CHAPTER 3: Authentication utilities
-import {
-    generateSessionKey,
-    getStoredSessionKey,
-    storeSessionKey,
-    removeSessionKey,
-    storeJWT,
-    removeJWT,
-    type SessionKey,
-} from './lib/utils';
 
 declare global {
     interface Window {
-        ethereum?: any;
+        ethereum?: {
+            request: (args: { method: string; params?: any[] }) => Promise<any>;
+            on?: (event: string, handler: (...args: any[]) => void) => void;
+            removeListener?: (event: string, handler: (...args: any[]) => void) => void;
+            isMetaMask?: boolean;
+        };
     }
 }
 
-// CHAPTER 3: EIP-712 domain for Nexus authentication
-const getAuthDomain = () => ({
-    name: 'Nexus',
-});
+const WS_URL = import.meta.env.VITE_NITROLITE_WS_URL || 'wss://clearnode-v1-rc.yellow.org/ws';
+const CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID || '11155111');
+const USER_REJECTED_REQUEST_CODE = 4001;
+const SUPPORTED_ASSETS = ['usdc', 'weth'] as const;
+type SupportedAsset = typeof SUPPORTED_ASSETS[number];
 
-// CHAPTER 3: Authentication constants
-const AUTH_SCOPE = 'nexus.app';
-const APP_NAME = 'Nexus';
-const SESSION_DURATION = 3600; // 1 hour
+const DEFAULT_ASSET_DECIMALS: Record<SupportedAsset, number> = {
+    usdc: 6,
+    weth: 18,
+};
 
 export function App() {
     const [account, setAccount] = useState<Address | null>(null);
     const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
-    const [wsStatus, setWsStatus] = useState<WsStatus>('Disconnected');
-    // CHAPTER 3: Authentication state
-    const [sessionKey, setSessionKey] = useState<SessionKey | null>(null);
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [isAuthAttempted, setIsAuthAttempted] = useState(false);
-    const [sessionExpireTimestamp, setSessionExpireTimestamp] = useState<string>('');
-    // CHAPTER 4: Add balance state to store fetched balances
-    const [balances, setBalances] = useState<Record<string, string> | null>(null);
-    // CHAPTER 4: Add loading state for better user experience
-    const [isLoadingBalances, setIsLoadingBalances] = useState(false);
-    
-    // FINAL: Add transfer state
+    const [client, setClient] = useState<NitroliteClient | null>(null);
+    const [isConnectingWallet, setIsConnectingWallet] = useState(false);
+    const [selectedAsset, setSelectedAsset] = useState<SupportedAsset>('usdc');
+    const [status, setStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
+    const [balances, setBalances] = useState<Record<string, string>>({});
+    const [assets, setAssets] = useState<ClearNodeAsset[]>([]);
     const [isTransferring, setIsTransferring] = useState(false);
     const [transferStatus, setTransferStatus] = useState<string | null>(null);
-    
-    // FINAL: Use transfer hook
-    const { handleTransfer: transferFn } = useTransfer(sessionKey, isAuthenticated);
+    const pollerRef = useRef<EventPoller | null>(null);
+    const clientRef = useRef<NitroliteClient | null>(null);
 
-    useEffect(() => {
-        // CHAPTER 3: Get or generate session key on startup (IMPORTANT: Store in localStorage)
-        const existingSessionKey = getStoredSessionKey();
-        if (existingSessionKey) {
-            setSessionKey(existingSessionKey);
-        } else {
-            const newSessionKey = generateSessionKey();
-            storeSessionKey(newSessionKey);
-            setSessionKey(newSessionKey);
-        }
-
-        webSocketService.addStatusListener(setWsStatus);
-        webSocketService.connect();
-
-        return () => {
-            webSocketService.removeStatusListener(setWsStatus);
-        };
+    const stopNitroliteSession = useCallback(() => {
+        pollerRef.current?.stop();
+        pollerRef.current = null;
+        clientRef.current?.close();
+        clientRef.current = null;
+        setClient(null);
+        setStatus('disconnected');
+        setBalances({});
+        setAssets([]);
     }, []);
 
-    // CHAPTER 3: Auto-trigger authentication when conditions are met
-    useEffect(() => {
-        if (account && sessionKey && wsStatus === 'Connected' && !isAuthenticated && !isAuthAttempted) {
-            setIsAuthAttempted(true);
+    const ensureSepoliaNetwork = useCallback(async () => {
+        if (!window.ethereum) return;
 
-            // Generate fresh timestamp for this auth attempt
-            const expireTimestamp = String(Math.floor(Date.now() / 1000) + SESSION_DURATION);
-            setSessionExpireTimestamp(expireTimestamp);
-
-            const authParams: AuthRequestParams = {
-                address: account,
-                session_key: sessionKey.address,
-                app_name: APP_NAME,
-                expire: expireTimestamp,
-                scope: AUTH_SCOPE,
-                application: account,
-                allowances: [],
-            };
-
-            createAuthRequestMessage(authParams).then((payload) => {
-                webSocketService.send(payload);
+        try {
+            await window.ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: `0x${sepolia.id.toString(16)}` }],
             });
-        }
-    }, [account, sessionKey, wsStatus, isAuthenticated, isAuthAttempted]);
-
-    // CHAPTER 4: Automatically fetch balances when user is authenticated
-    // This useEffect hook runs whenever authentication status, sessionKey, or account changes
-    useEffect(() => {
-        // Only proceed if all required conditions are met:
-        // 1. User has completed authentication
-        // 2. We have a session key (temporary private key for signing)
-        // 3. We have the user's wallet address
-        if (isAuthenticated && sessionKey && account) {
-            console.log('Authenticated! Fetching ledger balances...');
-
-            // CHAPTER 4: Show loading state while we fetch balances
-            setIsLoadingBalances(true);
-
-            // CHAPTER 4: Create a "signer" - this is what signs our requests without user popups
-            // Think of this like a temporary stamp that proves we're allowed to make requests
-            const sessionSigner = createECDSAMessageSigner(sessionKey.privateKey);
-
-            // CHAPTER 4: Create a signed request to get the user's asset balances
-            // This is like asking "What's in my wallet?" but with cryptographic proof
-            createGetLedgerBalancesMessage(sessionSigner, account)
-                .then((getBalancesPayload) => {
-                    // Send the signed request through our WebSocket connection
-                    console.log('Sending balance request...');
-                    webSocketService.send(getBalancesPayload);
-                })
-                .catch((error) => {
-                    console.error('Failed to create balance request:', error);
-                    setIsLoadingBalances(false); // Stop loading on error
-                    // In a real app, you might show a user-friendly error message here
+        } catch (switchErr: any) {
+            if (switchErr.code === 4902) {
+                await window.ethereum.request({
+                    method: 'wallet_addEthereumChain',
+                    params: [{
+                        chainId: `0x${sepolia.id.toString(16)}`,
+                        chainName: sepolia.name,
+                        rpcUrls: [sepolia.rpcUrls.default.http[0]],
+                    }],
                 });
+                return;
+            }
+            throw switchErr;
         }
-    }, [isAuthenticated, sessionKey, account]);
+    }, []);
 
-    // FINAL: Handle support function for PostList
-    const handleSupport = async (recipient: string, amount: string) => {
-        setIsTransferring(true);
-        setTransferStatus('Sending support...');
-        
-        const result = await transferFn(recipient as Address, amount);
-        
-        if (result.success) {
-            setTransferStatus('Support sent!');
-        } else {
-            setIsTransferring(false);
-            setTransferStatus(null);
-            if (result.error) {
-                alert(result.error);
-            }
+    const revokeEthAccountsPermission = useCallback(async () => {
+        if (!window.ethereum) return;
+
+        try {
+            await window.ethereum.request({
+                method: 'wallet_revokePermissions',
+                params: [{ eth_accounts: {} }],
+            });
+        } catch {
+            // MetaMask versions < 11.5 may not support wallet_revokePermissions.
         }
-    };
+    }, []);
 
-    // CHAPTER 3: Handle server messages for authentication
-    useEffect(() => {
-        const handleMessage = async (data: any) => {
-            const response = parseAnyRPCResponse(JSON.stringify(data));
-
-            // Handle auth challenge
-            if (
-                response.method === RPCMethod.AuthChallenge &&
-                walletClient &&
-                sessionKey &&
-                account &&
-                sessionExpireTimestamp
-            ) {
-                const challengeResponse = response as AuthChallengeResponse;
-
-                const authParams = {
-                    scope: AUTH_SCOPE,
-                    application: walletClient.account?.address as `0x${string}`,
-                    participant: sessionKey.address as `0x${string}`,
-                    expire: sessionExpireTimestamp,
-                    allowances: [],
-                };
-
-                const eip712Signer = createEIP712AuthMessageSigner(walletClient, authParams, getAuthDomain());
-
-                try {
-                    const authVerifyPayload = await createAuthVerifyMessage(eip712Signer, challengeResponse);
-                    webSocketService.send(authVerifyPayload);
-                } catch (error) {
-                    alert('Signature rejected. Please try again.');
-                    setIsAuthAttempted(false);
-                }
-            }
-
-            // Handle auth success
-            if (response.method === RPCMethod.AuthVerify && response.params?.success) {
-                setIsAuthenticated(true);
-                if (response.params.jwtToken) storeJWT(response.params.jwtToken);
-            }
-
-            // CHAPTER 4: Handle balance responses (when we asked for balances)
-            if (response.method === RPCMethod.GetLedgerBalances) {
-                const balanceResponse = response as GetLedgerBalancesResponse;
-                const balances = balanceResponse.params.ledgerBalances;
-
-                console.log('Received balance response:', balances);
-
-                // Check if we actually got balance data back
-                if (balances && balances.length > 0) {
-                    // CHAPTER 4: Transform the data for easier use in our UI
-                    // Convert from: [{asset: "usdc", amount: "100"}, {asset: "eth", amount: "0.5"}]
-                    // To: {"usdc": "100", "eth": "0.5"}
-                    const balancesMap = Object.fromEntries(
-                        balances.map((balance) => [balance.asset, balance.amount]),
-                    );
-                    console.log('Setting balances:', balancesMap);
-                    setBalances(balancesMap);
-                } else {
-                    console.log('No balance data received - wallet appears empty');
-                    setBalances({});
-                }
-                // CHAPTER 4: Stop loading once we receive any balance response
-                setIsLoadingBalances(false);
-            }
-
-            // CHAPTER 4: Handle live balance updates (server pushes these automatically)
-            if (response.method === RPCMethod.BalanceUpdate) {
-                const balanceUpdate = response as BalanceUpdateResponse;
-                const balances = balanceUpdate.params.balanceUpdates;
-
-                console.log('Live balance update received:', balances);
-
-                // Same data transformation as above
-                const balancesMap = Object.fromEntries(
-                    balances.map((balance) => [balance.asset, balance.amount]),
-                );
-                console.log('Updating balances in real-time:', balancesMap);
-                setBalances(balancesMap);
-            }
-
-            // FINAL: Handle transfer response
-            if (response.method === RPCMethod.Transfer) {
-                const transferResponse = response as TransferResponse;
-                console.log('Transfer completed:', transferResponse.params);
-                
-                setIsTransferring(false);
-                setTransferStatus(null);
-                
-                alert(`Transfer completed successfully!`);
-            }
-
-            // Handle errors
-            if (response.method === RPCMethod.Error) {
-                console.error('RPC Error:', response.params);
-                
-                if (isTransferring) {
-                    setIsTransferring(false);
-                    setTransferStatus(null);
-                    alert(`Transfer failed: ${response.params.error}`);
-                } else {
-                    // Other errors (like auth failures)
-                    removeJWT();
-                    removeSessionKey();
-                    alert(`Error: ${response.params.error}`);
-                    setIsAuthAttempted(false);
-                }
-            }
-        };
-
-        webSocketService.addMessageListener(handleMessage);
-        return () => webSocketService.removeMessageListener(handleMessage);
-    }, [walletClient, sessionKey, sessionExpireTimestamp, account, isTransferring]);
-
-    const connectWallet = async () => {
+    const connectWallet = useCallback(async () => {
         if (!window.ethereum) {
-            alert('MetaMask not found! Please install MetaMask from https://metamask.io/');
+            alert('MetaMask not found!');
             return;
         }
 
+        setIsConnectingWallet(true);
+
         try {
-            // Check current network
-            const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-            if (chainId !== '0x1') { // Not mainnet
-                alert('Please switch to Ethereum Mainnet in MetaMask for this workshop');
-                // Note: In production, you might want to automatically switch networks
+            const authorizedAccounts = await window.ethereum.request({ method: 'eth_accounts' }) as Address[];
+            if (authorizedAccounts.length > 0) {
+                await revokeEthAccountsPermission();
             }
 
-            const tempClient = createWalletClient({
-                chain: mainnet,
-                transport: custom(window.ethereum),
-            });
-            const [address] = await tempClient.requestAddresses();
+            try {
+                await window.ethereum.request({
+                    method: 'wallet_requestPermissions',
+                    params: [{ eth_accounts: {} }],
+                });
+            } catch (permissionError: any) {
+                if (permissionError?.code !== USER_REJECTED_REQUEST_CODE) {
+                    console.warn('wallet_requestPermissions failed, falling back to eth_requestAccounts:', permissionError);
+                } else {
+                    throw permissionError;
+                }
+            }
 
-            if (!address) {
-                alert('No wallet address found. Please ensure MetaMask is unlocked.');
+            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' }) as Address[];
+            if (!accounts || accounts.length === 0) {
+                alert('No wallet address found.');
                 return;
             }
 
-            // CHAPTER 3: Create wallet client with account for EIP-712 signing
-            const walletClient = createWalletClient({
-                account: address,
-                chain: mainnet,
+            await ensureSepoliaNetwork();
+
+            const wc = createWalletClient({
+                account: accounts[0],
+                chain: sepolia,
                 transport: custom(window.ethereum),
             });
 
-            setWalletClient(walletClient);
-            setAccount(address);
-        } catch (error) {
+            stopNitroliteSession();
+            setAccount(accounts[0]);
+            setWalletClient(wc);
+        } catch (error: any) {
             console.error('Wallet connection failed:', error);
-            alert('Failed to connect wallet. Please try again.');
+            if (error?.code === USER_REJECTED_REQUEST_CODE) {
+                alert('Wallet connection request was rejected.');
+            } else {
+                alert('Failed to connect wallet.');
+            }
+        } finally {
+            setIsConnectingWallet(false);
+        }
+    }, [ensureSepoliaNetwork, revokeEthAccountsPermission, stopNitroliteSession]);
+
+    const disconnectWallet = useCallback(async () => {
+        stopNitroliteSession();
+        setWalletClient(null);
+        setAccount(null);
+        await revokeEthAccountsPermission();
+    }, [revokeEthAccountsPermission, stopNitroliteSession]);
+
+    useEffect(() => {
+        if (!walletClient || !account) return;
+
+        let cancelled = false;
+        let nitroClient: NitroliteClient | null = null;
+
+        (async () => {
+            setStatus('connecting');
+            try {
+                const blockchainRPCs: Record<number, string> = {};
+                if (sepolia.rpcUrls?.default?.http?.[0]) {
+                    blockchainRPCs[sepolia.id] = sepolia.rpcUrls.default.http[0];
+                }
+
+                nitroClient = await NitroliteClient.create({
+                    wsURL: WS_URL,
+                    walletClient: walletClient as any,
+                    chainId: CHAIN_ID,
+                    blockchainRPCs,
+                });
+
+                if (cancelled) {
+                    nitroClient.close();
+                    return;
+                }
+
+                setClient(nitroClient);
+                clientRef.current = nitroClient;
+                setStatus('connected');
+                console.log('NitroliteClient connected for Nexus');
+
+                const callbacks: EventPollerCallbacks = {
+                    onBalanceUpdate: (balanceList) => {
+                        const map: Record<string, string> = {};
+                        for (const b of balanceList) {
+                            map[b.asset] = b.amount;
+                        }
+                        setBalances(map);
+                    },
+                    onAssetsUpdate: (assetList) => {
+                        setAssets(assetList);
+                    },
+                    onError: (err) => {
+                        console.warn('[Nexus poller] error:', err.message);
+                    },
+                };
+
+                const poller = new EventPoller(nitroClient, callbacks, 10000);
+                poller.start();
+                pollerRef.current = poller;
+            } catch (err) {
+                if (!cancelled) {
+                    console.error('Failed to create NitroliteClient:', err);
+                    setStatus('disconnected');
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+            pollerRef.current?.stop();
+            pollerRef.current = null;
+            if (nitroClient && clientRef.current === nitroClient) {
+                nitroClient.close();
+                clientRef.current = null;
+                setClient(null);
+            }
+        };
+    }, [walletClient, account]);
+
+    useEffect(() => {
+        if (!window.ethereum) return;
+
+        const handleAccountsChanged = (accounts: string[]) => {
+            if (!accounts || accounts.length === 0) {
+                stopNitroliteSession();
+                setWalletClient(null);
+                setAccount(null);
+                return;
+            }
+
+            const nextAccount = accounts[0] as Address;
+            setAccount(nextAccount);
+            setWalletClient(createWalletClient({
+                account: nextAccount,
+                chain: sepolia,
+                transport: custom(window.ethereum!),
+            }));
+        };
+
+        const handleChainChanged = () => {
+            window.location.reload();
+        };
+
+        window.ethereum.on?.('accountsChanged', handleAccountsChanged);
+        window.ethereum.on?.('chainChanged', handleChainChanged);
+
+        return () => {
+            window.ethereum?.removeListener?.('accountsChanged', handleAccountsChanged);
+            window.ethereum?.removeListener?.('chainChanged', handleChainChanged);
+        };
+    }, [stopNitroliteSession]);
+
+    const selectableAssets = useMemo(() => {
+        const availableAssets = new Set<string>();
+        for (const balanceAsset of Object.keys(balances)) {
+            availableAssets.add(balanceAsset.toLowerCase());
+        }
+        for (const asset of assets) {
+            availableAssets.add(asset.symbol.toLowerCase());
+        }
+
+        const filteredAssets = SUPPORTED_ASSETS.filter((asset) => availableAssets.has(asset));
+        return filteredAssets.length > 0 ? filteredAssets : [...SUPPORTED_ASSETS];
+    }, [balances, assets]);
+
+    useEffect(() => {
+        if (!selectableAssets.includes(selectedAsset)) {
+            setSelectedAsset(selectableAssets[0]);
+        }
+    }, [selectableAssets, selectedAsset]);
+
+    const getDecimals = useCallback((asset: string): number => {
+        const info = assets.find((a) => a.symbol.toLowerCase() === asset.toLowerCase());
+        if (info?.decimals !== undefined) {
+            return info.decimals;
+        }
+
+        const fallbackDecimals = DEFAULT_ASSET_DECIMALS[asset.toLowerCase() as SupportedAsset];
+        return fallbackDecimals ?? 6;
+    }, [assets]);
+
+    const getRawBalance = useCallback((asset: string): string => {
+        const normalizedAsset = asset.toLowerCase();
+        const directBalance = balances[normalizedAsset] ?? balances[asset];
+        if (directBalance !== undefined) {
+            return directBalance;
+        }
+
+        const caseInsensitiveEntry = Object.entries(balances).find(([key]) => key.toLowerCase() === normalizedAsset);
+        return caseInsensitiveEntry?.[1] ?? '0';
+    }, [balances]);
+
+    const formatBalance = useCallback((rawAmount: string, asset: string): string => {
+        if (!rawAmount || rawAmount === '0') return '0.00';
+        const decimals = getDecimals(asset);
+        const num = Number(rawAmount) / Math.pow(10, decimals);
+        return num.toFixed(2);
+    }, [getDecimals]);
+
+    const handleSupport = useCallback(async (recipient: string, amount: string) => {
+        if (!client) {
+            alert('Not connected');
             return;
         }
-    };
+
+        setIsTransferring(true);
+        setTransferStatus(`Sending ${amount} ${selectedAsset.toUpperCase()} support...`);
+
+        try {
+            const asset = selectedAsset;
+            const decimals = getDecimals(asset);
+            const rawAmount = parseUnits(amount, decimals).toString();
+
+            await client.transfer(recipient as Address, [{ asset, amount: rawAmount }]);
+
+            setTransferStatus(`Support sent in ${selectedAsset.toUpperCase()}!`);
+            setTimeout(() => setTransferStatus(null), 3000);
+        } catch (error) {
+            console.error('Transfer failed:', error);
+            const msg = error instanceof Error ? error.message : 'Transfer failed';
+            alert(`Transfer failed: ${msg}`);
+            setTransferStatus(null);
+        } finally {
+            setIsTransferring(false);
+        }
+    }, [client, getDecimals, selectedAsset]);
 
     const formatAddress = (address: Address) => `${address.slice(0, 6)}...${address.slice(-4)}`;
+
+    const statusClass = status === 'connected' ? 'connected' : 'disconnected';
 
     return (
         <div className="app-container">
             <header className="header">
+                <div className="header-controls">
+                    {status !== 'disconnected' && (
+                        <>
+                            <BalanceDisplay
+                                balance={formatBalance(getRawBalance(selectedAsset), selectedAsset)}
+                                symbol={selectedAsset.toUpperCase()}
+                            />
+                            <select
+                                className="asset-selector"
+                                value={selectedAsset}
+                                onChange={(event) => setSelectedAsset((event.target as HTMLSelectElement).value as SupportedAsset)}
+                                disabled={isTransferring}
+                            >
+                                {selectableAssets.map((asset) => (
+                                    <option key={asset} value={asset}>
+                                        {asset.toUpperCase()}
+                                    </option>
+                                ))}
+                            </select>
+                        </>
+                    )}
+                    <div className={`ws-status ${statusClass}`}>
+                        <div className="status-dot" />
+                        <span>{status === 'connected' ? 'Connected' : status === 'connecting' ? 'Connecting' : 'Disconnected'}</span>
+                    </div>
+                    {account ? (
+                        <>
+                            <span className="ws-status">{formatAddress(account)}</span>
+                            <button className="wallet-connector" onClick={disconnectWallet}>
+                                Disconnect
+                            </button>
+                        </>
+                    ) : (
+                        <button className="wallet-connector" onClick={connectWallet} disabled={isConnectingWallet}>
+                            {isConnectingWallet ? 'Connecting...' : 'Connect Wallet'}
+                        </button>
+                    )}
+                </div>
                 <div className="header-content">
                     <h1 className="logo">Nexus</h1>
                     <p className="tagline">Decentralized insights for the next generation of builders</p>
                 </div>
-                <div className="header-controls">
-                    {/* CHAPTER 4: Display balance when authenticated */}
-                    {isAuthenticated && (
-                        <BalanceDisplay
-                            balance={
-                                isLoadingBalances ? 'Loading...' : (balances?.['usdc'] ?? null)
-                            }
-                            symbol="USDC"
-                        />
-                    )}
-                    <div className={`ws-status ${wsStatus.toLowerCase()}`}>
-                        <span className="status-dot"></span> {wsStatus}
-                    </div>
-                    <div className="wallet-connector">
-                        {account ? (
-                            <div className="wallet-info">Connected: {formatAddress(account)}</div>
-                        ) : (
-                            <button onClick={connectWallet} className="connect-button">
-                                Connect Wallet
-                            </button>
-                        )}
-                    </div>
-                </div>
             </header>
 
             <main className="main-content">
-                
-                {/* FINAL: Status message for transfers */}
-                {transferStatus && (
-                    <div className="transfer-status">
-                        {transferStatus}
-                    </div>
-                )}
-                
-                {/* CHAPTER 4: Pass authentication state to enable balance-dependent features */}
-                <PostList 
-                    posts={posts} 
-                    isWalletConnected={!!account} 
-                    isAuthenticated={isAuthenticated}
+                {transferStatus && <div className="transfer-status">{transferStatus}</div>}
+                <PostList
+                    posts={posts}
+                    isWalletConnected={!!account}
+                    isAuthenticated={status === 'connected'}
                     onTransfer={handleSupport}
                     isTransferring={isTransferring}
+                    selectedAsset={selectedAsset}
                 />
             </main>
         </div>

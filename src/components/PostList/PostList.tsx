@@ -8,9 +8,13 @@ interface PostListProps {
     isAuthenticated: boolean;
     onTransfer?: (recipient: string, amount: string) => Promise<void>;
     isTransferring?: boolean;
+    selectedAsset: string;
 }
 
-export function PostList({ posts, isWalletConnected, isAuthenticated, onTransfer, isTransferring }: PostListProps) {
+export function PostList({ posts, isWalletConnected, isAuthenticated, onTransfer, isTransferring, selectedAsset }: PostListProps) {
+    const normalizedAsset = selectedAsset.toLowerCase();
+    const supportAmount = normalizedAsset === 'weth' ? '0.00001' : '0.01';
+
     const handleTip = async (post: Post) => {
         if (!onTransfer) {
             console.log('Transfer function not available');
@@ -24,8 +28,8 @@ export function PostList({ posts, isWalletConnected, isAuthenticated, onTransfer
             return;
         }
 
-        console.log(`Supporting ${post.authorName} with 0.01 USDC`);
-        await onTransfer(author.walletAddress, '0.01');
+        console.log(`Supporting ${post.authorName} with ${supportAmount} ${selectedAsset.toUpperCase()}`);
+        await onTransfer(author.walletAddress, supportAmount);
     };
 
     const formatDate = (dateString: string) => {
@@ -84,7 +88,7 @@ export function PostList({ posts, isWalletConnected, isAuthenticated, onTransfer
                                                   ? 'Authenticating...'
                                                   : isTransferring
                                                     ? 'Supporting...'
-                                                    : 'Support 0.01 USDC'}
+                                                    : `Support ${supportAmount} ${selectedAsset.toUpperCase()}`}
                                         </button>
                                     </div>
                                 </div>

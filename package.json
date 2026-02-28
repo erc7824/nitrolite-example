@@ -10,7 +10,8 @@
         "preview": "vite preview"
     },
     "dependencies": {
-        "@erc7824/nitrolite": "0.4.0",
+        "@erc7824/nitrolite": "file:./vendor/erc7824-nitrolite-0.5.3.tgz",
+        "@erc7824/nitrolite-compat": "file:./vendor/erc7824-nitrolite-compat-0.1.0.tgz",
         "preact": "^10.26.9",
         "viem": "2.32.0"
     },
