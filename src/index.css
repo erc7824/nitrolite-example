@@ -142,11 +142,19 @@ select {
     right: 2rem;
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 1rem;
 }
 
 .wallet-connector {
     position: static;
+}
+
+.asset-selector {
+    min-width: 120px;
+    text-transform: uppercase;
+    font-family: "JetBrains Mono", monospace;
 }
 
 .ws-status {
@@ -186,4 +194,23 @@ select {
     color: white;
     border-radius: 6px;
     font-weight: 500;
+}
+
+@media (max-width: 900px) {
+    .header {
+        padding-top: 2rem;
+    }
+
+    .header-controls {
+        position: static;
+        justify-content: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .tagline {
+        position: static;
+        transform: none;
+        display: inline-block;
+        margin-top: 0.25rem;
+    }
 }
