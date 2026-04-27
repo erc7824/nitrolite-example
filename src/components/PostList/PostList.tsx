@@ -13,7 +13,11 @@ interface PostListProps {
 
 export function PostList({ posts, isWalletConnected, isAuthenticated, onTransfer, isTransferring, selectedAsset }: PostListProps) {
     const normalizedAsset = selectedAsset.toLowerCase();
-    const supportAmount = normalizedAsset === 'weth' ? '0.00001' : '0.01';
+    const supportAmounts: Record<string, string> = {
+        yusd: '0.01',
+        yellow: '0.01',
+    };
+    const supportAmount = supportAmounts[normalizedAsset] ?? '0.01';
 
     const handleTip = async (post: Post) => {
         if (!onTransfer) {

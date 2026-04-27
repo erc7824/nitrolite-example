@@ -2,7 +2,7 @@
 
 This project demonstrates how to build high-throughput, low-latency Web3 applications.
 
-The core goal is to show how to use `@erc7824/nitrolite`, a state channel framework for EVM chains, to enable off-chain interactions with on-chain security. This allows you to build a user experience with instant finality that feels as responsive as a traditional Web2 application.
+The core goal is to show how to use `@yellow-org/sdk-compat` on top of `@yellow-org/sdk`, a state channel framework for EVM chains, to enable off-chain interactions with on-chain security. This allows you to build a user experience with instant finality that feels as responsive as a traditional Web2 application.
 
 ## Workshop Goal
 
@@ -14,7 +14,8 @@ In this workshop, we will use a sample content platform application as a practic
 - **Language:** TypeScript
 - **Build Tool:** Vite
 - **Styling:** CSS Modules
-- **Key Library:** `@erc7824/nitrolite`
+- **Key Libraries:** `@yellow-org/sdk-compat`, `@yellow-org/sdk`
+- **Demo Assets:** YUSD and YELLOW on Ethereum Sepolia
 
 ## Getting Started
 
@@ -39,11 +40,12 @@ In this workshop, we will use a sample content platform application as a practic
     ```
 
 3.  **Set up environment variables:**
-    Create a file named `.env.local` in the root of the project and add your Nitrolite WebSocket URL:
+    Create a file named `.env.local` in the root of the project and add your Nitrolite WebSocket URL. The current endpoint for the YUSD/YELLOW demo assets is:
 
     ```env
     # .env.local
-    VITE_NITROLITE_WS_URL=wss://your-rpc-endpoint.com/ws
+    VITE_NITROLITE_WS_URL=wss://clearnode-stress.yellow.org/v1/ws
+    VITE_CHAIN_ID=11155111
     ```
 
 4.  **Run the development server:**

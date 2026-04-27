@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'preact/hooks';
 import { createWalletClient, custom, type Address, type WalletClient, parseUnits } from 'viem';
 import { sepolia } from 'viem/chains';
-import { NitroliteClient, EventPoller, type EventPollerCallbacks, type ClearNodeAsset } from '@erc7824/nitrolite-compat';
+import { NitroliteClient, EventPoller, type EventPollerCallbacks, type ClearNodeAsset } from '@yellow-org/sdk-compat';
 import { PostList } from './components/PostList/PostList';
 import { BalanceDisplay } from './components/BalanceDisplay/BalanceDisplay';
 import { posts } from './data/posts';
@@ -17,15 +17,15 @@ declare global {
     }
 }
 
-const WS_URL = import.meta.env.VITE_NITROLITE_WS_URL || 'wss://clearnode-v1-rc.yellow.org/ws';
+const WS_URL = import.meta.env.VITE_NITROLITE_WS_URL || 'wss://clearnode-stress.yellow.org/v1/ws';
 const CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID || '11155111');
 const USER_REJECTED_REQUEST_CODE = 4001;
-const SUPPORTED_ASSETS = ['usdc', 'weth'] as const;
+const SUPPORTED_ASSETS = ['yusd', 'yellow'] as const;
 type SupportedAsset = typeof SUPPORTED_ASSETS[number];
 
 const DEFAULT_ASSET_DECIMALS: Record<SupportedAsset, number> = {
-    usdc: 6,
-    weth: 18,
+    yusd: 6,
+    yellow: 18,
 };
 
 export function App() {
@@ -33,7 +33,7 @@ export function App() {
     const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
     const [client, setClient] = useState<NitroliteClient | null>(null);
     const [isConnectingWallet, setIsConnectingWallet] = useState(false);
-    const [selectedAsset, setSelectedAsset] = useState<SupportedAsset>('usdc');
+    const [selectedAsset, setSelectedAsset] = useState<SupportedAsset>('yusd');
     const [status, setStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
     const [balances, setBalances] = useState<Record<string, string>>({});
     const [assets, setAssets] = useState<ClearNodeAsset[]>([]);
